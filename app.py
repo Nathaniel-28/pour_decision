@@ -16,8 +16,11 @@ app.permanent_session_lifetime = timedelta(minutes=5)
 
 # PostgreSQL & Railway Deployment Optimization
 db_url = os.environ.get('DATABASE_URL', 'sqlite:///pour_decision.db')
+# Force SQLAlchemy to use the pg8000 driver
 if db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
+    db_url = db_url.replace("postgres://", "postgresql+pg8000://", 1)
+elif db_url.startswith("postgresql://"):
+    db_url = db_url.replace("postgresql://", "postgresql+pg8000://", 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
