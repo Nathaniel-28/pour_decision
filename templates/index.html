@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pour Decision | Smart Kiosk</title>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <style>
+        :root {
+            --dark-green: #1A3626; --ivory: #FFFFF0;
+            --accent-gold: #D4AF37; --text-dark: #2C3E2D;
+            --border-color: #E2E8DF;
+        }
+
+        body {
+            margin: 0; font-family: 'Inter', sans-serif;
+            background: linear-gradient(rgba(255, 255, 240, 0.7), rgba(255, 255, 240, 0.7)),
+                        url('/static/image_pd.jpg') no-repeat center center fixed;
+            background-size: cover; color: var(--text-dark); overflow-x: hidden;
+            height: 100vh;
+        }
+
+        .main-container { display: flex; flex-direction: column; max-width: 1250px; margin: 0 auto; padding: 20px; height: calc(100vh - 40px); }
+        @media (min-width: 992px) { .main-container { flex-direction: row; gap: 30px; } }
+
+        .menu-board { flex-grow: 1; padding: 10px 15px; overflow-y: auto; height: 100%; box-sizing: border-box; }
+
+        .instruction-box { background: rgba(255, 255, 240, 0.95); border: 2px dashed var(--accent-gold); border-radius: 12px; padding: 20px; margin-bottom: 25px; display: flex; gap: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .instruction-column { flex: 1; padding: 10px; }
+        .instruction-column h3 { margin-top: 0; color: var(--dark-green); border-bottom: 1px solid var(--border-color); padding-bottom: 5px; display: flex; align-items: center; gap: 5px; }
+
+        .utility-bar { background: var(--dark-green); padding: 15px; border-radius: 12px; margin-bottom: 30px; display: flex; gap: 15px; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
+        .utility-wrapper { position: relative; flex: 1; min-width: 150px; }
+        .utility-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--dark-green); pointer-events: none; }
+        .utility-bar input, .utility-bar select { width: 100%; height: 45px; box-sizing: border-box; padding: 0 12px 0 40px; border: none; border-radius: 8px; font-size: 14px; background: var(--ivory); color: var(--text-dark); outline: none; transition: 0.3s; }
+        .utility-bar input:focus, .utility-bar select:focus { border: 2px solid var(--accent-gold); }
+
+        .category-title { border-bottom: 2px solid var(--dark-green); margin-bottom: 15px; padding-bottom: 5px; color: var(--dark-green); }
+        .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
+
+        .product-card { perspective: 1000px; height: 290px; position: relative; cursor: pointer; margin: 5px; }
+        .card-inner { position: relative; width: 100%; height: 100%; transition: transform 0.6s; transform-style: preserve-3d; border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .product-card:not(.unavailable):hover .card-inner { box-shadow: 0 0 15px var(--accent-gold); outline: 2px solid var(--accent-gold); }
+        .product-card.flipped .card-inner { transform: rotateY(180deg); }
+
+        .product-card.unavailable { pointer-events: none; }
+        .product-card.unavailable .image-wrapper img {
+            filter: grayscale(90%) blur(3px);
+            transform: scale(1.05);
+            opacity: 0.8;
+        }
+        .product-card.unavailable h4,
+        .product-card.unavailable p { opacity: 0.55; }
+        .unavailable-image-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(244, 247, 246, 0.4);
+            color: #5E6E60;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: 700; z-index: 20; text-align: center;
+            text-transform: uppercase; letter-spacing: 2px;
+            backdrop-filter: blur(1px);
+        }
+        .unavailable-image-overlay .status-icon { font-size: 26px; margin-bottom: 4px; font-weight: 300; }
+
+        .card-front, .card-back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 15px; background: var(--ivory); border: 1px solid var(--border-color); overflow: hidden; text-align: center; }
+
+        .image-wrapper { position: relative; width: 100%; height: 160px; overflow: hidden; border-top-left-radius: 15px; border-top-right-radius: 15px; }
+        .image-wrapper img { width: 100%; height: 100%; object-fit: cover; transition: 0.3s; }
+
+        .card-front h4 { margin: 15px 0 5px; padding: 0 10px; display: flex; align-items: center; justify-content: center; gap: 5px;}
+
+        .item-badge {
+            position: absolute; top: 10px; right: 10px;
+            background: rgba(255, 255, 240, 0.9); color: var(--dark-green);
+            width: 22px; height: 22px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15); z-index: 30;
+            border: 1px solid var(--border-color); cursor: help;
+            transition: 0.3s;
+        }
+        .item-badge:hover { background: var(--accent-gold); color: var(--ivory); }
+
+        .add-icon { position: absolute; bottom: 15px; right: 15px; background: var(--dark-green); color: var(--ivory); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: 0.3s; z-index: 10; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .add-icon:hover { background: var(--accent-gold); transform: scale(1.15); }
+
+        .card-back { background: var(--dark-green); color: var(--ivory); transform: rotateY(180deg); padding: 20px; display: flex; flex-direction: column; justify-content: center; box-sizing: border-box; }
+        .card-back h4 { color: var(--accent-gold); margin-top: 0; }
+        .card-back p { font-size: 14px; line-height: 1.5; }
+
+        /* Dynamic Right Column layout */
+        .right-column { display: flex; flex-direction: column; width: 360px; height: 100%; gap: 15px; flex-shrink: 0; }
+
+        .poster-container {
+            height: 20%;
+            width: 100%;
+            border-radius: 15px;
+            border: 2px solid var(--dark-green);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            background: linear-gradient(rgba(26, 54, 38, 0.6), rgba(26, 54, 38, 0.6)), url('https://images.unsplash.com/photo-1497935586351-b67a49e012bf?auto=format&fit=crop&w=600&q=80') center/cover no-repeat;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: 0.3s height ease;
+        }
+        .poster-container h2 {
+            font-size: 26px;
+            color: var(--ivory);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-align: center;
+            margin: 0;
+            padding: 15px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            font-family: 'Inter', sans-serif;
+        }
+
+        .cart-panel { background: var(--ivory); border-radius: 15px; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 100%; height: calc(80% - 15px); border: 2px solid var(--dark-green); display: flex; flex-direction: column; box-sizing: border-box; flex-shrink: 0; transition: 0.3s height ease;}
+
+        /* Responsive Breakpoints */
+        @media (min-width: 992px) and (min-height: 900px) {
+            /* Tall displays like iPad Pro */
+            .poster-container { height: 40%; }
+            .cart-panel { height: calc(60% - 15px); }
+        }
+
+        @media (max-width: 991px) {
+            /* Mobile/Tablet adjustments */
+            .main-container { height: auto; min-height: 100vh; overflow-y: visible; padding: 15px; }
+            .menu-board { height: auto; overflow-y: visible; padding: 0; }
+            .right-column { width: 100%; height: auto; margin-top: 20px; }
+            .poster-container { height: 200px; }
+            .cart-panel { height: auto; min-height: 450px; }
+            .instruction-box { flex-direction: column; }
+            .utility-bar { flex-wrap: wrap; }
+            #mic-btn { order: -1; }
+        }
+
+        .cart-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-bottom: 10px; }
+        .cart-header h3 { margin: 0; color: var(--dark-green); display: flex; align-items: center; gap: 8px; }
+        .clear-btn { background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: bold; transition: 0.3s; }
+        .clear-btn:hover { background: #c0392b; }
+        .clear-btn:disabled { background: #bdc3c7; cursor: not-allowed; opacity: 0.7; }
+
+        #cart-list { flex-grow: 1; overflow-y: auto; padding-right: 5px; margin-bottom: 10px; }
+        #cart-list::-webkit-scrollbar { width: 6px; }
+        #cart-list::-webkit-scrollbar-thumb { background-color: var(--accent-gold); border-radius: 10px; }
+
+        .cart-item { display:flex; flex-direction: column; margin-bottom:15px; border-bottom: 1px dashed var(--border-color); padding-bottom: 10px; }
+        .cart-item-top { display: flex; justify-content: space-between; margin-bottom: 5px; font-weight: 500; }
+        .cart-controls { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+        .ctrl-btn { background: var(--dark-green); color: var(--ivory); border: none; width: 24px; height: 24px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; transition: 0.2s; }
+        .ctrl-btn:hover { background: var(--accent-gold); }
+        .qty-display { font-weight: bold; width: 20px; text-align: center; }
+        .del-btn { color: #e74c3c; background: none; border: none; cursor: pointer; display: flex; align-items: center; padding: 0; transition: 0.2s; }
+        .del-btn:hover { transform: scale(1.1); color: #c0392b; }
+
+        .checkout-footer { flex-shrink: 0; }
+        .checkout-selectors { position: relative; margin-bottom: 15px; }
+        .checkout-selectors select { width: 100%; height: 45px; padding-left: 40px; border-radius: 8px; border: 1px solid var(--border-color); background: #fff; box-sizing: border-box; }
+        .checkout-selectors .icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--dark-green); }
+
+        .checkout-btn { width: 100%; padding: 15px; background: var(--dark-green); color: var(--ivory); border: none; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 16px; transition: 0.3s; }
+        .checkout-btn:hover { background: var(--accent-gold); }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 2000; backdrop-filter: blur(5px); }
+
+        .receipt-card { background: var(--ivory); width: 90%; max-width: 400px; border-radius: 12px; padding: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); border: 2px dashed var(--accent-gold); color: var(--text-dark); position: relative; }
+        .receipt-card h2 { text-align: center; color: var(--dark-green); margin-top: 0; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;}
+        .receipt-info { font-size: 14px; margin-bottom: 15px; }
+        .receipt-items { max-height: 200px; overflow-y: auto; border-top: 1px dashed #ccc; border-bottom: 1px dashed #ccc; padding: 15px 0; margin-bottom: 15px; }
+        .receipt-item-row { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px; }
+        .receipt-total { text-align: right; font-size: 20px; font-weight: bold; color: var(--dark-green); }
+
+        .qty-card { background: var(--ivory); width: 420px; border-radius: 12px; padding: 25px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); text-align: center; max-height: 90vh; overflow-y: auto;}
+        .qty-card h3 { color: var(--dark-green); margin-top: 0; margin-bottom: 5px;}
+
+        #modifier-section {
+            display: none; text-align: left; margin-bottom: 20px; background: #ffffff;
+            padding: 20px; border-radius: 12px; border: 1px solid var(--border-color);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+        }
+        .mod-group { margin-bottom: 15px; }
+        .mod-group:last-child { margin-bottom: 0; }
+        .mod-title {
+            color: var(--dark-green); font-size: 13px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.5px; margin-bottom: 10px; display: block; border-bottom: 1px solid var(--border-color);
+            padding-bottom: 6px;
+        }
+        .mod-options { display: flex; flex-wrap: wrap; gap: 8px; }
+        .custom-radio { position: relative; display: inline-block; cursor: pointer; margin: 0; }
+        .custom-radio input { position: absolute; opacity: 0; cursor: pointer; height: 0; width: 0; }
+        .radio-label {
+            display: inline-block; padding: 8px 16px; border: 1px solid var(--border-color);
+            border-radius: 6px; font-size: 13px; color: #555; background: #fafafa;
+            transition: all 0.2s ease; font-weight: 500; user-select: none;
+        }
+        .custom-radio:hover .radio-label { border-color: var(--accent-gold); background: #fff; color: var(--dark-green); }
+        .custom-radio input:checked ~ .radio-label {
+            background: var(--dark-green); color: var(--ivory); border-color: var(--dark-green);
+            box-shadow: 0 2px 6px rgba(26, 54, 38, 0.2);
+        }
+
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+
+        .qty-control-wrapper {
+            display: flex; align-items: center; border: 2px solid var(--dark-green);
+            border-radius: 8px; overflow: hidden; width: 100px;
+        }
+        .qty-control-btn {
+            background: var(--dark-green); color: white; border: none; width: 32px; height: 32px;
+            font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s;
+        }
+        .qty-control-btn:hover { background: var(--accent-gold); }
+        .qty-input {
+            border: none; width: 36px; height: 32px; padding: 0; text-align: center;
+            font-size: 16px; outline: none; margin: 0; background: transparent; font-weight: bold; color: var(--dark-green);
+        }
+
+        .shot-qty-wrapper {
+            display: flex; align-items: center; border: 1px solid var(--border-color);
+            border-radius: 6px; overflow: hidden; opacity: 0.5; pointer-events: none; transition: 0.2s;
+        }
+        .shot-qty-btn {
+            background: #f5f5f5; color: #555; border: none; width: 26px; height: 30px;
+            font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s;
+        }
+        .shot-qty-btn:hover { background: #e0e0e0; }
+        .extra-shot-input {
+            border: none; width: 30px; height: 30px; padding: 0; text-align: center;
+            font-size: 14px; outline: none; margin: 0; background: transparent; font-weight: bold; color: var(--dark-green);
+        }
+
+        .qty-actions { display: flex; gap: 10px; }
+        .qty-actions button { flex: 1; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; font-size: 15px;}
+        .btn-confirm { background: var(--dark-green); color: white; }
+        .btn-confirm:hover { background: var(--accent-gold); }
+        .btn-cancel { background: #ccc; color: #333; }
+        .btn-cancel:hover { background: #aaa; }
+
+        .action-btn-row { display: flex; gap: 10px; margin-top: 20px; }
+        .print-btn, .download-btn { flex: 1; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .download-btn { background: var(--accent-gold); color: var(--dark-green); }
+        .print-btn { background: var(--dark-green); color: var(--ivory); }
+        .print-btn:hover, .download-btn:hover { filter: brightness(1.1); }
+
+        .close-receipt-btn { width: 100%; padding: 12px; background: #666; color: white; border: none; border-radius: 8px; margin-top: 10px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+
+        #allergen-box { position: fixed; bottom: 20px; left: 20px; width: 260px; background: var(--ivory); border: 2px solid var(--accent-gold); border-radius: 10px; padding: 15px; display: none; z-index: 1000; box-shadow: 0 5px 20px rgba(0,0,0,0.1); color: var(--text-dark); }
+
+        /* Relocated and scaled inline Mic Button */
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7); } 70% { box-shadow: 0 0 0 12px rgba(212, 175, 55, 0); } 100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); } }
+        @keyframes sound { 0% { opacity: 0.35; transform: scaleY(0.5); } 100% { opacity: 1; transform: scaleY(1); } }
+
+        #mic-btn { width: 45px; height: 45px; flex-shrink: 0; border-radius: 50%; background: var(--dark-green); color: var(--ivory); border: 2px solid var(--accent-gold); cursor: pointer; transition: 0.3s; box-shadow: 0 4px 8px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; padding: 0; outline: none;}
+        #mic-btn.active { background: #e74c3c; animation: pulse 1.5s infinite; border-color: white;}
+        #mic-btn:hover { transform: scale(1.05); }
+        #mic-btn .mic-icon { font-size: 24px; }
+
+        #mic-btn .waveform { display: none; align-items: center; justify-content: center; gap: 3px; height: 20px; }
+        #mic-btn .bar { width: 4px; background-color: var(--ivory); border-radius: 2px; animation: sound 0ms -800ms linear infinite alternate; }
+        #mic-btn.active .mic-icon { display: none; }
+        #mic-btn.active .waveform { display: flex; }
+
+        #mic-btn .bar:nth-child(1) { height: 8px; animation-duration: 400ms; }
+        #mic-btn .bar:nth-child(2) { height: 16px; animation-duration: 500ms; }
+        #mic-btn .bar:nth-child(3) { height: 10px; animation-duration: 350ms; }
+        #mic-btn .bar:nth-child(4) { height: 18px; animation-duration: 450ms; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #receipt-modal, #receipt-modal * { visibility: visible; }
+            #receipt-modal { position: absolute; left: 0; top: 0; background: none; width: 100%; box-shadow: none; }
+            .receipt-card { border: none; width: 100%; max-width: 100%; box-shadow: none; }
+            .action-btn-row, .close-receipt-btn, #qrcode-container, #qr-help-text { display: none !important; }
+        }
+    </style>
+</head>
+
+<body>
+<div class="main-container">
+    <div class="menu-board">
+        <div class="instruction-box">
+            <div class="instruction-column" style="border-right: 2px solid var(--border-color); flex: 1.5;">
+                <h3><span class="material-symbols-outlined">mic</span> Voice Orders</h3>
+                <p style="font-size: 14px;">Tap the mic icon and speak naturally. Try these commands:</p>
+                <ul style="font-size: 13px; color: #555; line-height: 1.6; margin-top: 5px;">
+                    <li><strong>Custom Order:</strong> <em>"Add one Iced Latte with Oat Milk and Less Sweet."</em></li>
+                    <li><strong>Multi-Order:</strong> <em>"I want two Hot Americanos, one Croissant, and a Turon."</em></li>
+                    <li><strong>Adjust Qty:</strong> <em>"Increase my Americano by one"</em> or <em>"Decrease the Croissant."</em></li>
+                    <li><strong>Inquiries:</strong> <em>"What are the ingredients of the Tapsilog?"</em> or <em>"Do you sell doughnuts?"</em></li>
+                </ul>
+            </div>
+            <div class="instruction-column" style="flex: 1;">
+                <h3><span class="material-symbols-outlined">touch_app</span> Touch Orders</h3>
+                <p style="font-size: 14px;">Browse or search the menu below.</p>
+                <ul style="font-size: 13px; color: #555; line-height: 1.6; margin-top: 5px;">
+                    <li><strong>Click a card</strong> to flip it and read the ingredients/details.</li>
+                    <li>Tap the <strong>+</strong> icon to customize and add an item to your tray.</li>
+                    <li>Use the tray controls to easily add or remove quantities.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="utility-bar">
+            <button id="mic-btn" title="Tap to speak">
+                <span class="material-symbols-outlined mic-icon">mic</span>
+                <div class="waveform">
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                </div>
+            </button>
+
+            <div class="utility-wrapper">
+                <span class="material-symbols-outlined utility-icon">search</span>
+                <input type="text" id="search-bar" placeholder="Search menu items..." onkeyup="applyFilters()">
+            </div>
+            <div class="utility-wrapper">
+                <span class="material-symbols-outlined utility-icon">category</span>
+                <select id="category-filter" onchange="handleCategoryChange()">
+                    <option value="All">All Categories</option>
+                    {% for cat in menu.keys() %}
+                    <option value="section-{{cat}}">{{cat}}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="utility-wrapper">
+                <span class="material-symbols-outlined utility-icon">filter_alt</span>
+                <select id="type-filter" onchange="applyFilters()">
+                    <option value="All">All Types</option>
+                    <option value="Espresso">Espresso-Based</option>
+                    <option value="Non-Espresso">Non-Espresso</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="product-container">
+            {% for cat, items in menu.items() %}
+            <div class="category-section" id="section-{{cat}}">
+                <h2 class="category-title">{{cat}}</h2>
+                <div class="menu-grid">
+                    {% for item in items %}
+                    <div class="product-card {% if not item.is_available %}unavailable{% endif %}"
+                         data-id="{{item.id}}"
+                         data-type="{{item.type if item.type else 'Other'}}"
+                         onclick="this.classList.toggle('flipped')">
+
+                        <div class="card-inner">
+                            <div class="card-front">
+                                <div class="item-badge"
+                                     onmouseover="showAllergens('{{item.name}}', '{{item.allergens}}'); event.stopPropagation();"
+                                     onmouseout="hideAllergens(); event.stopPropagation();"
+                                     title="View Allergens">
+                                    <span class="material-symbols-outlined" style="font-size: 15px;">info</span>
+                                </div>
+                                <div class="image-wrapper">
+                                    <img src="/static/{{item.image}}" alt="{{item.name}}">
+                                    {% if not item.is_available %}
+                                    <div class="unavailable-image-overlay">
+                                        <span class="material-symbols-outlined status-icon">remove_circle_outline</span>
+                                        <span>Unavailable</span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+
+                                <h4>{{item.name}}</h4> <p style="color: var(--dark-green); font-weight: bold;">₱{{item.price}}</p>
+
+                                <div class="add-icon" onclick="openQuantityModal(event, '{{item.name | replace('\'', '\\\'')}}', {{item.price}}, '{{item.type}}', {{'true' if item.has_size else 'false'}}, {{'true' if item.has_milk else 'false'}}, {{'true' if item.has_sweetness else 'false'}}, {{'true' if item.has_addons else 'false'}})">
+                                    <span class="material-symbols-outlined">add</span>
+                                </div>
+                            </div>
+                            <div class="card-back">
+                                <h4>{{item.name}}</h4>
+                                <p>{{item.ingredients}}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="right-column">
+        <div class="poster-container">
+            <h2>Pour Decision Cafe</h2>
+        </div>
+
+        <div class="cart-panel">
+            <div class="cart-header">
+                <h3><span class="material-symbols-outlined">shopping_cart</span> Your Tray</h3>
+                <button id="clear-btn" class="clear-btn" onclick="clearCart()" disabled>Clear All</button>
+            </div>
+
+            <div id="cart-list"></div>
+
+            <div class="checkout-footer">
+                <div style="display:flex; justify-content:space-between; font-size: 1.3em; margin-bottom: 15px; border-top: 2px solid var(--border-color); padding-top: 15px;">
+                    <strong>Total:</strong><span id="total-price" style="color: var(--dark-green); font-weight: bold;">₱0</span>
+                </div>
+
+                <div class="checkout-selectors">
+                    <span class="material-symbols-outlined icon" id="order-type-icon">restaurant</span>
+                    <select id="order-type" onchange="updateIcon(this, 'order-type-icon', {'Dine-in':'restaurant', 'Take-out':'shopping_bag'})">
+                        <option value="Dine-in">Dine-in</option>
+                        <option value="Take-out">Take-out</option>
+                    </select>
+                </div>
+
+                <div class="checkout-selectors">
+                    <span class="material-symbols-outlined icon" id="payment-icon">payments</span>
+                    <select id="payment-method" onchange="updateIcon(this, 'payment-icon', {'Cash':'payments', 'GCash':'smartphone', 'PayMaya':'credit_card'})">
+                        <option value="Cash">Cash</option>
+                        <option value="GCash">GCash</option>
+                        <option value="PayMaya">PayMaya</option>
+                    </select>
+                </div>
+
+                <button class="checkout-btn" onclick="processCheckout()">CONFIRM ORDER</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="qty-modal">
+    <div class="qty-card">
+        <h3 id="qty-item-name">Item Name</h3>
+
+        <div id="modifier-section">
+            <div class="mod-group" id="mod-group-size">
+                <span class="mod-title">Size Options</span>
+                <div class="mod-options">
+                    <label class="custom-radio">
+                        <input type="radio" name="size" value="Small ({{config.small_oz}})" data-price="{{config.small_price}}">
+                        <span class="radio-label">Small ({{config.small_oz}}) {% if config.small_price > 0 %}(+₱{{config.small_price}}){% elif config.small_price < 0 %}(₱{{config.small_price}}){% endif %}</span>
+                    </label>
+                    <label class="custom-radio">
+                        <input type="radio" name="size" value="Medium ({{config.medium_oz}})" data-price="{{config.medium_price}}" checked>
+                        <span class="radio-label">Medium ({{config.medium_oz}}) {% if config.medium_price > 0 %}(+₱{{config.medium_price}}){% elif config.medium_price < 0 %}(₱{{config.medium_price}}){% endif %}</span>
+                    </label>
+                    <label class="custom-radio">
+                        <input type="radio" name="size" value="Large ({{config.large_oz}})" data-price="{{config.large_price}}">
+                        <span class="radio-label">Large ({{config.large_oz}}) {% if config.large_price > 0 %}(+₱{{config.large_price}}){% elif config.large_price < 0 %}(₱{{config.large_price}}){% endif %}</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="mod-group" id="mod-group-milk">
+                <span class="mod-title">Milk Alternative</span>
+                <div class="mod-options">
+                    <label class="custom-radio"><input type="radio" name="milk" value="Whole Milk" data-price="0" checked><span class="radio-label">Whole</span></label>
+                    <label class="custom-radio"><input type="radio" name="milk" value="Skim Milk" data-price="0"><span class="radio-label">Skim</span></label>
+                    <label class="custom-radio"><input type="radio" name="milk" value="Oat Milk" data-price="{{config.oat_price}}"><span class="radio-label">Oat (+₱{{config.oat_price}})</span></label>
+                    <label class="custom-radio"><input type="radio" name="milk" value="Almond Milk" data-price="{{config.almond_price}}"><span class="radio-label">Almond (+₱{{config.almond_price}})</span></label>
+                    <label class="custom-radio"><input type="radio" name="milk" value="Soy Milk" data-price="{{config.soy_price}}"><span class="radio-label">Soy (+₱{{config.soy_price}})</span></label>
+                </div>
+            </div>
+
+            <div class="mod-group" id="mod-group-sweetness">
+                <span class="mod-title">Sweetness Level</span>
+                <div class="mod-options">
+                    <label class="custom-radio"><input type="radio" name="sweetness" value="100% Sugar" checked><span class="radio-label">100%</span></label>
+                    <label class="custom-radio"><input type="radio" name="sweetness" value="75% Sugar"><span class="radio-label">75%</span></label>
+                    <label class="custom-radio"><input type="radio" name="sweetness" value="50% Sugar"><span class="radio-label">50%</span></label>
+                    <label class="custom-radio"><input type="radio" name="sweetness" value="25% Sugar"><span class="radio-label">25%</span></label>
+                    <label class="custom-radio"><input type="radio" name="sweetness" value="0% Sugar"><span class="radio-label">0%</span></label>
+                </div>
+            </div>
+
+            <div class="mod-group" id="mod-group-addons">
+                <span class="mod-title">Add-ons</span>
+                <div class="extra-shot-wrapper" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 5px;">
+                    <label class="custom-radio" style="display:flex; align-items:center;">
+                        <input type="checkbox" id="extra-shot" value="Extra Shot" data-price="{{config.shot_price}}" onchange="toggleExtraShot(this.checked)">
+                        <span class="radio-label">Espresso Shot (+₱{{config.shot_price}})</span>
+                    </label>
+                    <div id="shot-qty-controls" class="shot-qty-wrapper">
+                        <button type="button" class="shot-qty-btn" style="border-right: 1px solid var(--border-color);" onclick="document.getElementById('extra-shot-qty').stepDown();">-</button>
+                        <input type="number" id="extra-shot-qty" class="extra-shot-input" value="1" min="1" disabled>
+                        <button type="button" class="shot-qty-btn" style="border-left: 1px solid var(--border-color);" onclick="document.getElementById('extra-shot-qty').stepUp();">+</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px;">
+            <span style="font-weight: bold; color: var(--dark-green); font-size: 16px;">Qty:</span>
+            <div class="qty-control-wrapper">
+                <button type="button" class="qty-control-btn" onclick="document.getElementById('qty-input').stepDown();">-</button>
+                <input type="number" id="qty-input" class="qty-input" value="1" min="1">
+                <button type="button" class="qty-control-btn" onclick="document.getElementById('qty-input').stepUp();">+</button>
+            </div>
+        </div>
+
+        <div class="qty-actions">
+            <button class="btn-cancel" onclick="closeQuantityModal()">Cancel</button>
+            <button class="btn-confirm" onclick="confirmQuantity()">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="receipt-modal">
+    <div class="receipt-card">
+        <h2><span class="material-symbols-outlined">receipt_long</span> Official Receipt</h2>
+        <div class="receipt-info">
+            <div style="display:flex; justify-content:space-between; margin-bottom: 5px;">
+                <span><strong>Date:</strong> <span id="r-date"></span></span>
+                <span><strong>Type:</strong> <span id="r-type"></span></span>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+                <span><strong>Tracking ID:</strong> <span id="r-id" style="color:var(--accent-gold); font-weight:bold;"></span></span>
+                <span><strong>Pay:</strong> <span id="r-pay"></span></span>
+            </div>
+        </div>
+        <div class="receipt-items" id="r-items"></div>
+        <div class="receipt-total">Total: <span id="r-total"></span></div>
+
+        <div id="qrcode-container" style="display:flex; justify-content:center; margin: 15px auto; padding: 10px; background: white; border: 2px solid var(--accent-gold); border-radius: 8px; width: fit-content;"></div>
+        <p id="qr-help-text" style="text-align:center; font-size:12px; color:#666; margin-top: -5px; margin-bottom: 15px;">Scan to save a digital copy to your phone.</p>
+
+        <div class="action-btn-row">
+            <button class="print-btn" style="flex: 1;" onclick="window.print()"><span class="material-symbols-outlined">print</span> Print Physical Copy</button>
+        </div>
+        <button class="close-receipt-btn" onclick="closeReceipt()">Close & Next Order</button>
+    </div>
+</div>
+
+<div id="allergen-box">
+    <strong style="color: var(--dark-green); display: flex; align-items: center; gap: 5px;">
+        <span class="material-symbols-outlined">warning</span> ALLERGEN MATRIX
+    </strong>
+    <p id="allergen-content" style="margin-top: 5px; font-size: 14px;"></p>
+</div>
+
+<script>
+let cart = [];
+let pendingItem = null;
+const synth = window.speechSynthesis;
+
+function openQuantityModal(event, name, price, itemType, hasSize, hasMilk, hasSweetness, hasAddons) {
+    event.stopPropagation();
+    pendingItem = { name, price, itemType, hasSize, hasMilk, hasSweetness, hasAddons };
+    document.getElementById('qty-item-name').innerText = name;
+    document.getElementById('qty-input').value = 1;
+
+    const isCustomizable = hasSize || hasMilk || hasSweetness || hasAddons;
+
+    if (isCustomizable) {
+        document.getElementById('modifier-section').style.display = 'block';
+
+        // Toggle specific visibility based on DB triggers
+        document.getElementById('mod-group-size').style.display = hasSize ? 'block' : 'none';
+        document.getElementById('mod-group-milk').style.display = hasMilk ? 'block' : 'none';
+        document.getElementById('mod-group-sweetness').style.display = hasSweetness ? 'block' : 'none';
+        document.getElementById('mod-group-addons').style.display = hasAddons ? 'block' : 'none';
+
+        // Reset radio defaults safely
+        if(hasSize) document.querySelector(`input[name="size"][value="Medium ({{config.medium_oz}})"]`).checked = true;
+        if(hasMilk) document.querySelector('input[name="milk"][value="Whole Milk"]').checked = true;
+        if(hasSweetness) document.querySelector('input[name="sweetness"][value="100% Sugar"]').checked = true;
+
+        if(hasAddons) {
+            let shotCb = document.getElementById('extra-shot');
+            shotCb.checked = false;
+
+            let shotQty = document.getElementById('extra-shot-qty');
+            shotQty.value = 1;
+            shotQty.disabled = true;
+
+            let shotControls = document.getElementById('shot-qty-controls');
+            if (shotControls) {
+                shotControls.style.opacity = '0.5';
+                shotControls.style.pointerEvents = 'none';
+            }
+        }
+    } else {
+        document.getElementById('modifier-section').style.display = 'none';
+    }
+
+    document.getElementById('qty-modal').style.display = 'flex';
+}
+
+function closeQuantityModal() {
+    document.getElementById('qty-modal').style.display = 'none';
+    pendingItem = null;
+}
+
+function toggleExtraShot(isChecked) {
+    const controls = document.getElementById('shot-qty-controls');
+    const input = document.getElementById('extra-shot-qty');
+    input.disabled = !isChecked;
+    if (isChecked) {
+        controls.style.opacity = '1';
+        controls.style.pointerEvents = 'auto';
+    } else {
+        controls.style.opacity = '0.5';
+        controls.style.pointerEvents = 'none';
+        input.value = 1;
+    }
+}
+
+function confirmQuantity() {
+    const qty = parseInt(document.getElementById('qty-input').value);
+    if (qty > 0 && pendingItem) {
+        let finalPrice = pendingItem.price;
+        let mods = [];
+
+        if (pendingItem.hasSize) {
+            const sizeOpt = document.querySelector('input[name="size"]:checked');
+            if(sizeOpt) {
+                mods.push(sizeOpt.value);
+                finalPrice += parseFloat(sizeOpt.dataset.price);
+            }
+        }
+
+        if(pendingItem.hasMilk) {
+            const milkOpt = document.querySelector('input[name="milk"]:checked');
+            if(milkOpt && milkOpt.value !== 'Whole Milk') {
+                mods.push(milkOpt.value);
+                finalPrice += parseFloat(milkOpt.dataset.price);
+            }
+        }
+
+        if(pendingItem.hasSweetness) {
+            const sweetOpt = document.querySelector('input[name="sweetness"]:checked');
+            if(sweetOpt && sweetOpt.value !== '100% Sugar') {
+                mods.push(sweetOpt.value);
+            }
+        }
+
+        if(pendingItem.hasAddons) {
+            const shotOpt = document.getElementById('extra-shot');
+            if(shotOpt.checked) {
+                let shotQty = parseInt(document.getElementById('extra-shot-qty').value) || 1;
+                mods.push(shotQty + " Extra Shot" + (shotQty > 1 ? "s" : ""));
+                finalPrice += parseFloat(shotOpt.dataset.price) * shotQty;
+            }
+        }
+
+        addToCart(pendingItem.name, finalPrice, qty, mods);
+        closeQuantityModal();
+    } else {
+        alert("Please enter a valid quantity.");
+    }
+}
+
+function addToCart(name, price, qty = 1, modifiers = []) {
+    const existingItem = cart.find(item => item.name === name && JSON.stringify(item.modifiers) === JSON.stringify(modifiers));
+    if(existingItem) {
+        existingItem.quantity += qty;
+    } else {
+        cart.push({ name, price, quantity: qty, modifiers: modifiers });
+    }
+    updateUI();
+}
+
+function removeFromCart(index) {
+    cart.splice(index, 1);
+    updateUI();
+}
+
+function clearCart() {
+    if(cart.length > 0 && confirm("Are you sure you want to clear your entire tray?")) {
+        cart = [];
+        updateUI();
+    }
+}
+
+function increaseQuantity(index) {
+    cart[index].quantity++;
+    updateUI();
+}
+
+function decreaseQuantity(index) {
+    if (cart[index].quantity > 1) {
+        cart[index].quantity--;
+    } else {
+        removeFromCart(index);
+    }
+    updateUI();
+}
+
+function removeItemByName(name, qtyToRemove = 1) {
+    const index = cart.findIndex(item => item.name.toLowerCase() === name.toLowerCase());
+    if(index !== -1) {
+        if(cart[index].quantity > qtyToRemove) {
+            cart[index].quantity -= qtyToRemove;
+        } else {
+            cart.splice(index, 1);
+        }
+        updateUI();
+    }
+}
+
+function updateUI() {
+    const list = document.getElementById('cart-list');
+    list.innerHTML = cart.map((item, i) => {
+        let modHTML = (item.modifiers && item.modifiers.length > 0) ? `<br><small style="color:#7f8c8d; font-size:11px;">+ ${item.modifiers.join(', ')}</small>` : '';
+        return `
+        <div class="cart-item">
+            <div class="cart-item-top">
+                <span style="line-height:1.2;">${item.name}${modHTML}</span>
+                <span>₱${(item.price * item.quantity).toFixed(2)}</span>
+            </div>
+            <div class="cart-controls">
+                <button class="ctrl-btn" onclick="decreaseQuantity(${i})">-</button>
+                <span class="qty-display">${item.quantity}</span>
+                <button class="ctrl-btn" onclick="increaseQuantity(${i})">+</button>
+                <button class="del-btn" onclick="removeFromCart(${i})">
+                    <span class="material-symbols-outlined">delete</span>
+                </button>
+            </div>
+        </div>
+        `
+    }).join('');
+
+    const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    document.getElementById('total-price').innerText = `₱${total.toFixed(2)}`;
+    document.getElementById('clear-btn').disabled = cart.length === 0;
+}
+
+function handleCategoryChange() {
+    const catFilter = document.getElementById('category-filter').value;
+    const typeFilter = document.getElementById('type-filter');
+    if (catFilter === 'section-Hot' || catFilter === 'section-Cold' || catFilter === 'All') {
+        typeFilter.disabled = false;
+    } else {
+        typeFilter.value = 'All';
+        typeFilter.disabled = true;
+    }
+    applyFilters();
+}
+
+function applyFilters() {
+    const query = document.getElementById('search-bar').value.toLowerCase();
+    const catFilter = document.getElementById('category-filter').value;
+    const typeFilter = document.getElementById('type-filter').value;
+
+    document.querySelectorAll('.category-section').forEach(section => {
+        section.style.display = (catFilter === 'All' || section.id === catFilter) ? 'block' : 'none';
+    });
+
+    document.querySelectorAll('.product-card').forEach(card => {
+        const name = card.querySelector('h4').innerText.toLowerCase();
+        const type = card.dataset.type;
+        const matchesSearch = name.includes(query);
+        const matchesType = (typeFilter === 'All' || type === typeFilter);
+        card.style.display = (matchesSearch && matchesType) ? 'block' : 'none';
+    });
+}
+
+function showAllergens(name, allergens) {
+    const box = document.getElementById('allergen-box');
+    document.getElementById('allergen-content').innerText = `${name}: ${allergens}`;
+    box.style.display = 'block';
+}
+function hideAllergens() { document.getElementById('allergen-box').style.display = 'none'; }
+function updateIcon(selectElem, iconId, mapping) { document.getElementById(iconId).innerText = mapping[selectElem.value]; }
+
+const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+recognition.lang = 'en-US';
+const micBtn = document.getElementById('mic-btn');
+
+micBtn.onclick = () => {
+    recognition.start();
+    micBtn.classList.add('active');
+};
+
+recognition.onend = () => {
+    micBtn.classList.remove('active');
+};
+
+recognition.onresult = (event) => {
+    const text = event.results[0][0].transcript;
+    fetch('/process-voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text })
+    })
+    .then(res => res.json())
+    .then(data => {
+        const utter = new SpeechSynthesisUtterance(data.reply);
+        utter.rate = 0.85; utter.pitch = 1.1; synth.speak(utter);
+
+        if (data.action === "clear_cart") {
+            cart = [];
+            updateUI();
+        }
+        else if (data.action === "add") {
+            addToCart(data.item.name, data.unit_price, data.quantity, data.modifiers);
+        }
+        else if (data.action === "multi_add") {
+            data.items.forEach(i => addToCart(i.item.name, i.unit_price, i.quantity, i.modifiers));
+        }
+        else if (data.action === "remove") {
+            removeItemByName(data.item.name, data.quantity);
+        }
+        else if (data.action === "multi_remove") {
+            data.items.forEach(i => removeItemByName(i.item.name, i.quantity));
+        }
+    });
+};
+
+function processCheckout() {
+    if(cart.length === 0) {
+        alert("Your tray is empty!");
+        return;
+    }
+
+    const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const method = document.getElementById('payment-method').value;
+    const orderType = document.getElementById('order-type').value;
+
+    fetch('/save-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cart: cart, total: total, payment: method, order_type: orderType })
+    })
+    .then(res => {
+        if (!res.ok) throw new Error("Server error saving order");
+        return res.json();
+    })
+    .then(data => {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+        document.getElementById('r-date').innerText = timeString;
+        document.getElementById('r-id').innerText = data.tracking_id;
+        document.getElementById('r-type').innerText = orderType;
+        document.getElementById('r-pay').innerText = method;
+        document.getElementById('r-total').innerText = `₱${total.toFixed(2)}`;
+
+        document.getElementById('r-items').innerHTML = cart.map(item => {
+            let modStr = (item.modifiers && item.modifiers.length > 0) ? `<div style="font-size:11px; color:#666; margin-left:15px;">+ ${item.modifiers.join(', ')}</div>` : '';
+            return `
+            <div class="receipt-item-row" style="flex-direction:column; align-items:flex-start; margin-bottom:8px;">
+                <div style="display:flex; justify-content:space-between; width:100%;">
+                    <span>${item.quantity}x ${item.name}</span>
+                    <span>₱${(item.price * item.quantity).toFixed(2)}</span>
+                </div>
+                ${modStr}
+            </div>
+            `;
+        }).join('');
+
+        document.getElementById('qrcode-container').innerHTML = "";
+        let qrText = `POUR DECISION\nID: ${data.tracking_id}\nType: ${orderType}\nTotal: P${total.toFixed(2)}\nItems:\n`;
+        cart.forEach(item => {
+            qrText += `${item.quantity}x ${item.name}\n`;
+            if (item.modifiers && item.modifiers.length > 0) qrText += ` + ${item.modifiers.join(', ')}\n`;
+        });
+
+        new QRCode(document.getElementById("qrcode-container"), {
+            text: qrText,
+            width: 140, height: 140,
+            colorDark : "#1A3626", colorLight : "#ffffff",
+            correctLevel : QRCode.CorrectLevel.L
+        });
+
+        document.getElementById('receipt-modal').style.display = 'flex';
+    })
+    .catch(err => {
+        console.error(err);
+        alert("There was an error confirming your order. Please check the console.");
+    });
+}
+
+function closeReceipt() {
+    document.getElementById('receipt-modal').style.display = 'none';
+    cart = [];
+    updateUI();
+}
+
+const evtSource = new EventSource('/stream');
+evtSource.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+
+    if (data.type === 'toggle') {
+        const card = document.querySelector(`.product-card[data-id='${data.id}']`);
+        if (card) {
+            const imgWrapper = card.querySelector('.image-wrapper');
+            if (data.is_available) {
+                card.classList.remove('unavailable');
+                if (imgWrapper) {
+                    const overlay = imgWrapper.querySelector('.unavailable-image-overlay');
+                    if (overlay) overlay.remove();
+                }
+            } else {
+                card.classList.add('unavailable');
+                if (imgWrapper && !imgWrapper.querySelector('.unavailable-image-overlay')) {
+                    const overlay = document.createElement('div');
+                    overlay.className = 'unavailable-image-overlay';
+                    overlay.innerHTML = '<span class="material-symbols-outlined status-icon">remove_circle_outline</span><span>Unavailable</span>';
+                    imgWrapper.appendChild(overlay);
+                }
+            }
+        }
+    }
+    else if (data.type === 'refresh') {
+        window.location.reload();
+    }
+};
+</script>
+</body>
+</html>

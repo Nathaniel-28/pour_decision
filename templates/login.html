@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pour Decision | Admin Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+    <style>
+        :root {
+            --dark-green: #1A3626; --ivory: #FFFFF0;
+            --accent-gold: #D4AF37; --border-color: #E2E8DF;
+        }
+        body { margin: 0; font-family: 'Inter', sans-serif; background-color: #F4F7F6; color: #333; }
+
+        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--dark-green); display: flex; align-items: center; justify-content: center; z-index: 5000; }
+        .login-box { background: var(--ivory); padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; width: 300px; border: 2px solid var(--accent-gold); }
+        .login-box h2 { color: var(--dark-green); margin-top: 0; }
+        .login-box input { width: 100%; padding: 12px; margin: 15px 0; border: 1px solid var(--border-color); border-radius: 8px; box-sizing: border-box; }
+        .login-box button { width: 100%; padding: 12px; background: var(--accent-gold); color: var(--dark-green); border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div id="login-overlay">
+    <div class="login-box">
+        <span class="material-symbols-outlined" style="font-size: 48px; color: var(--dark-green);">admin_panel_settings</span>
+        <h2>Admin Login</h2>
+        <input type="password" id="admin-pass" placeholder="Enter Password">
+        <button onclick="attemptLogin()">Secure Login</button>
+        <a href="/" style="display: block; margin-top: 15px; color: #666; font-size: 12px; text-decoration: none;">Return to Kiosk</a>
+    </div>
+</div>
+
+<script>
+    function attemptLogin() {
+        const pass = document.getElementById('admin-pass').value;
+        fetch('/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: pass })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.success) {
+                // Redirect directly to the route to load the secure dashboard template
+                window.location.href = '/admin';
+            } else {
+                alert("Incorrect Password.");
+            }
+        });
+    }
+
+    // Allow user to hit "Enter"
+    document.getElementById('admin-pass').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            attemptLogin();
+        }
+    });
+</script>
+
+</body>
+</html>
