@@ -168,10 +168,12 @@
 
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 2000; backdrop-filter: blur(5px); }
 
-        .receipt-card { background: var(--ivory); width: 90%; max-width: 400px; border-radius: 12px; padding: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); border: 2px dashed var(--accent-gold); color: var(--text-dark); position: relative; }
+        /* Modified explicitly to ensure the whole card is naturally scrollable */
+        .receipt-card { background: var(--ivory); width: 90%; max-width: 400px; border-radius: 12px; padding: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); border: 2px dashed var(--accent-gold); color: var(--text-dark); position: relative; max-height: 90vh; overflow-y: auto; overflow-x: hidden;}
         .receipt-card h2 { text-align: center; color: var(--dark-green); margin-top: 0; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;}
         .receipt-info { font-size: 14px; margin-bottom: 15px; }
-        .receipt-items { max-height: 200px; overflow-y: auto; border-top: 1px dashed #ccc; border-bottom: 1px dashed #ccc; padding: 15px 0; margin-bottom: 15px; }
+        /* Removed max-height here so it expands and follows the main card's scroll */
+        .receipt-items { border-top: 1px dashed #ccc; border-bottom: 1px dashed #ccc; padding: 15px 0; margin-bottom: 15px; }
         .receipt-item-row { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px; }
         .receipt-total { text-align: right; font-size: 20px; font-weight: bold; color: var(--dark-green); }
 
@@ -281,7 +283,7 @@
             body * { visibility: hidden; }
             #receipt-modal, #receipt-modal * { visibility: visible; }
             #receipt-modal { position: absolute; left: 0; top: 0; background: none; width: 100%; box-shadow: none; }
-            .receipt-card { border: none; width: 100%; max-width: 100%; box-shadow: none; }
+            .receipt-card { border: none; width: 100%; max-width: 100%; box-shadow: none; overflow: visible;}
             .action-btn-row, .close-receipt-btn, #qrcode-container, #qr-help-text { display: none !important; }
         }
     </style>
@@ -835,7 +837,15 @@ function processCheckout() {
     })
     .then(data => {
         const now = new Date();
-        const timeString = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        // Force the output specifically to Philippine time
+        const timeString = now.toLocaleString('en-US', {
+            timeZone: 'Asia/Manila',
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
 
         document.getElementById('r-date').innerText = timeString;
         document.getElementById('r-id').innerText = data.tracking_id;
