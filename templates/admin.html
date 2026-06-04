@@ -119,7 +119,7 @@
         <div class="tab-bar">
             <button class="tab-btn active" onclick="switchTab('sales', this)"><span class="material-symbols-outlined" style="font-size: 18px;">analytics</span> Sales Tracker</button>
             <button class="tab-btn" onclick="switchTab('ai', this)"><span class="material-symbols-outlined" style="font-size: 18px;">auto_awesome</span> AI Reports</button>
-            <button class="tab-btn" onclick="switchTab('products', this)"><span class="material-symbols-outlined" style="font-size: 18px;">inventory_2</span> Product Management</button>
+            <button class="tab-btn" onclick="switchTab('products', this)"><span class="material-symbols-outlined" style="font-size: 18px;">inventory_2</span> Kiosk Configuration</button>
             <button class="tab-btn" onclick="switchTab('settings', this)"><span class="material-symbols-outlined" style="font-size: 18px;">tune</span> Modifiers & Sizes</button>
             <button class="tab-btn" onclick="switchTab('security', this)"><span class="material-symbols-outlined" style="font-size: 18px;">lock</span> Security Settings</button>
         </div>
@@ -235,7 +235,7 @@
                     <h3 style="display: flex; align-items: center; gap: 8px;">
                         <span class="material-symbols-outlined" style="color: #3498db;">lightbulb</span> AI Recommendations
                     </h3>
-                    <p id="ai-recommendation-text" style="font-size: 16px; line-height: 1.6; color: #333; margin-bottom: 0;"></p>
+                    <p id="ai-recommendation-text" style="font-size: 16px; line-height: 1.6; color: #333; margin-bottom: 0; white-space: pre-wrap;"></p>
                 </div>
 
                 <button class="add-btn" onclick="downloadExcelReport()" style="width: 100%; justify-content: center; padding: 15px; font-size: 16px;">
@@ -244,6 +244,15 @@
             </div>
         </div>
         <div id="tab-products" class="tab-content">
+            <div class="card" style="max-height: none; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="border:none; margin:0;">Category Display Order</h3>
+                    <button class="add-btn" onclick="saveCategoryOrder()" style="background: var(--accent-gold); color: var(--dark-green); padding: 8px 12px; font-size: 14px;">Save Order</button>
+                </div>
+                <p style="font-size: 13px; color: #666; margin: 5px 0 15px 0;">Use the arrows to arrange the order of categories displayed on the kiosk. Click Save Order when done.</p>
+                <div id="category-order-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+
             <div class="card" style="max-height: none;">
                 <div class="top-action">
                     <h3 style="border:none; margin:0;">Manage Kiosk Menu</h3>
@@ -485,6 +494,8 @@
     let pollInterval;
     let currentProducts = [];
     let categorySortOrders = {};
+    let globalCategoryOrder = [];
+    let currentOrderedCategories = [];
 
     let salesChart;
     let hourlyChartData = {};
@@ -810,14 +821,66 @@
                                 categorySortOrders[c] = data.category_sorts[c];
                             }
                         }
-                        renderGroupedProducts();
+
+                        globalCategoryOrder = data.category_order || ["Hot", "Cold", "Rice Meal", "Pastries", "Snacks", "Sandwiches"];
+                        let cats = [...new Set(currentProducts.map(p => p.category))];
+
+                        cats.sort((a, b) => {
+                            let idxA = globalCategoryOrder.indexOf(a);
+                            let idxB = globalCategoryOrder.indexOf(b);
+                            if(idxA === -1) idxA = 999;
+                            if(idxB === -1) idxB = 999;
+                            return idxA - idxB;
+                        });
+
+                        currentOrderedCategories = cats;
+                        renderGroupedProducts(currentOrderedCategories);
+                        renderCategoryOrderEditor(currentOrderedCategories);
                     });
             });
     }
 
+    function renderCategoryOrderEditor(orderedCategories) {
+        const list = document.getElementById('category-order-list');
+        list.innerHTML = orderedCategories.map((cat) => `
+            <div class="cat-order-item" style="display: flex; justify-content: space-between; align-items: center; background: #f9f9f9; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px;" data-category="${cat}">
+                <span style="font-weight: bold;">${cat}</span>
+                <div style="display: flex; gap: 5px;">
+                    <button type="button" onclick="moveCategory(this, -1)" style="border: none; background: #ddd; cursor: pointer; border-radius: 4px; padding: 5px; display:flex; align-items:center; justify-content:center;" title="Move Up"><span class="material-symbols-outlined" style="font-size: 16px;">arrow_upward</span></button>
+                    <button type="button" onclick="moveCategory(this, 1)" style="border: none; background: #ddd; cursor: pointer; border-radius: 4px; padding: 5px; display:flex; align-items:center; justify-content:center;" title="Move Down"><span class="material-symbols-outlined" style="font-size: 16px;">arrow_downward</span></button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function moveCategory(btn, direction) {
+        const item = btn.closest('.cat-order-item');
+        const parent = item.parentNode;
+        if (direction === -1 && item.previousElementSibling) {
+            parent.insertBefore(item, item.previousElementSibling);
+        } else if (direction === 1 && item.nextElementSibling) {
+            parent.insertBefore(item.nextElementSibling, item);
+        }
+    }
+
+    function saveCategoryOrder() {
+        const items = document.querySelectorAll('.cat-order-item');
+        const newOrder = Array.from(items).map(item => item.dataset.category);
+        fetch('/api/settings/category-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category_order: newOrder })
+        }).then(res => res.json()).then(data => {
+            if(data.success) {
+                alert('Category order saved successfully!');
+                loadProducts();
+            }
+        });
+    }
+
     function toggleSortOrder(category) {
         categorySortOrders[category] = categorySortOrders[category] === 'asc' ? 'desc' : 'asc';
-        renderGroupedProducts();
+        renderGroupedProducts(currentOrderedCategories);
 
         fetch('/api/settings/sort', {
             method: 'POST',
@@ -826,7 +889,7 @@
         });
     }
 
-    function renderGroupedProducts() {
+    function renderGroupedProducts(categoriesList) {
         const container = document.getElementById('manage-products-container');
         container.innerHTML = '';
 
@@ -835,19 +898,7 @@
             return;
         }
 
-        const categories = [...new Set(currentProducts.map(p => p.category))];
-        const displayOrder = ["Hot", "Cold", "Pastries", "Rice Meal", "Snacks", "Sandwiches"];
-
-        categories.sort((a, b) => {
-            const indexA = displayOrder.indexOf(a);
-            const indexB = displayOrder.indexOf(b);
-            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-            if (indexA !== -1) return -1;
-            if (indexB !== -1) return 1;
-            return a.localeCompare(b);
-        });
-
-        categories.forEach(cat => {
+        categoriesList.forEach(cat => {
             let catProducts = currentProducts.filter(p => p.category === cat);
             const sortOrder = categorySortOrders[cat];
 

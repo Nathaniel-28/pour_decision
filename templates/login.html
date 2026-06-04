@@ -42,7 +42,6 @@
         .then(res => res.json())
         .then(data => {
             if(data.success) {
-                // Redirect directly to the route to load the secure dashboard template
                 window.location.href = '/admin';
             } else {
                 alert("Incorrect Password.");
@@ -50,7 +49,6 @@
         });
     }
 
-    // Allow user to hit "Enter"
     document.getElementById('admin-pass').addEventListener('keypress', function (e) {
         if (e.key === 'Enter') {
             attemptLogin();

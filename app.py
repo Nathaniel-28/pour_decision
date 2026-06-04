@@ -55,6 +55,7 @@ class StoreConfig(db.Model):
     soy_price = db.Column(db.Float, default=30.0)
     shot_price = db.Column(db.Float, default=40.0)
     category_sorts = db.Column(db.Text, default="{}")
+    category_order = db.Column(db.Text, default='["Hot", "Cold", "Rice Meal", "Pastries", "Snacks", "Sandwiches"]')
 
 
 # --- Administrative Accounts Model ---
@@ -88,7 +89,7 @@ class Order(db.Model):
     payment_method = db.Column(db.String(20), nullable=False)
     order_type = db.Column(db.String(20), nullable=False, default="Dine-in")
     status = db.Column(db.String(20), default="Completed", index=True)
-    void_reason = db.Column(db.String(100), nullable=True)  # Added Void Reason Column
+    void_reason = db.Column(db.String(100), nullable=True)
     timestamp = db.Column(db.DateTime, default=get_pht, index=True)
     items = db.relationship('OrderItem', backref='order', lazy=True)
 
@@ -254,7 +255,17 @@ with app.app_context():
         except:
             db.session.rollback()
 
-    # Database Schema Migration for void_reason (Avoids dropping tables if already exists)
+    try:
+        db.session.execute(db.text("SELECT category_order FROM store_config LIMIT 1"))
+    except Exception:
+        db.session.rollback()
+        try:
+            db.session.execute(db.text(
+                "ALTER TABLE store_config ADD COLUMN category_order TEXT DEFAULT '[\"Hot\", \"Cold\", \"Rice Meal\", \"Pastries\", \"Snacks\", \"Sandwiches\"]'"))
+            db.session.commit()
+        except:
+            db.session.rollback()
+
     try:
         db.session.execute(db.text("SELECT void_reason FROM \"order\" LIMIT 1"))
     except Exception:
@@ -322,17 +333,24 @@ def index():
     config = StoreConfig.query.first()
 
     cat_sorts = {}
-    if config and config.category_sorts:
-        try:
-            cat_sorts = json.loads(config.category_sorts)
-        except:
-            pass
+    cat_order = ["Hot", "Cold", "Rice Meal", "Pastries", "Snacks", "Sandwiches"]
+    if config:
+        if config.category_sorts:
+            try:
+                cat_sorts = json.loads(config.category_sorts)
+            except:
+                pass
+        if config.category_order:
+            try:
+                cat_order = json.loads(config.category_order)
+            except:
+                pass
 
-    menu = {}
+    temp_menu = {}
     for p in products:
-        if p.category not in menu:
-            menu[p.category] = []
-        menu[p.category].append({
+        if p.category not in temp_menu:
+            temp_menu[p.category] = []
+        temp_menu[p.category].append({
             "id": p.id, "name": p.name, "price": p.price, "allergens": p.allergens,
             "category": p.category, "type": p.type, "image": p.image,
             "ingredients": p.ingredients, "is_available": p.is_available,
@@ -340,9 +358,20 @@ def index():
             "has_sweetness": p.has_sweetness, "has_addons": p.has_addons
         })
 
-    for cat in menu:
-        sort_order = cat_sorts.get(cat, 'asc')
-        menu[cat].sort(key=lambda x: x['name'].lower(), reverse=(sort_order == 'desc'))
+    menu = {}
+    # Prioritize saved categories configuration specifically for UI Render structure
+    for cat in cat_order:
+        if cat in temp_menu:
+            menu[cat] = temp_menu[cat]
+            sort_order = cat_sorts.get(cat, 'asc')
+            menu[cat].sort(key=lambda x: x['name'].lower(), reverse=(sort_order == 'desc'))
+
+    # Process and append any unconfigured remnant categories
+    for cat in temp_menu:
+        if cat not in menu:
+            menu[cat] = temp_menu[cat]
+            sort_order = cat_sorts.get(cat, 'asc')
+            menu[cat].sort(key=lambda x: x['name'].lower(), reverse=(sort_order == 'desc'))
 
     return render_template('index.html', menu=menu, config=config)
 
@@ -412,13 +441,22 @@ def manage_settings():
             cat_sorts = json.loads(config.category_sorts) if config.category_sorts else {}
         except:
             cat_sorts = {}
+
+        try:
+            cat_order = json.loads(config.category_order) if config.category_order else ["Hot", "Cold", "Rice Meal",
+                                                                                         "Pastries", "Snacks",
+                                                                                         "Sandwiches"]
+        except:
+            cat_order = ["Hot", "Cold", "Rice Meal", "Pastries", "Snacks", "Sandwiches"]
+
         return jsonify({
             "small_oz": config.small_oz, "small_price": config.small_price,
             "medium_oz": config.medium_oz, "medium_price": config.medium_price,
             "large_oz": config.large_oz, "large_price": config.large_price,
             "oat_price": config.oat_price, "almond_price": config.almond_price,
             "soy_price": config.soy_price, "shot_price": config.shot_price,
-            "category_sorts": cat_sorts
+            "category_sorts": cat_sorts,
+            "category_order": cat_order
         })
 
     if request.method == 'POST':
@@ -446,6 +484,19 @@ def save_sort_settings():
     config = StoreConfig.query.first()
     if config:
         config.category_sorts = json.dumps(request.json.get('category_sorts', {}))
+        db.session.commit()
+        notify_clients({"type": "refresh"})
+    return jsonify({"success": True})
+
+
+@app.route('/api/settings/category-order', methods=['POST'])
+def save_category_order():
+    if not session.get('admin_auth'):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    config = StoreConfig.query.first()
+    if config:
+        config.category_order = json.dumps(request.json.get('category_order', []))
         db.session.commit()
         notify_clients({"type": "refresh"})
     return jsonify({"success": True})
@@ -596,7 +647,6 @@ def process_voice():
 
     if is_asking_avail:
         best_item, best_phrase, ratio = get_best_fuzzy_match(re.sub(r'[^\w\s]', '', text), all_items)
-        # Ratio threshold increased to 0.65 to strictly filter out non-menu requests like "doughnuts"
         if best_item and ratio >= 0.65:
             if best_item['is_available']:
                 reply = f"Yes, we definitely have the {best_item['name']} ready for you! "
@@ -840,7 +890,7 @@ def process_voice():
                 base_str = f"{qty_word} {size_str} {i_name}".strip()
                 if other_mods:
                     mods_str = ", ".join(other_mods[:-1]) + ", and " + other_mods[-1] if len(other_mods) > 1 else \
-                    other_mods[0]
+                        other_mods[0]
                     reply_parts.append(f"{base_str} with {mods_str}")
                 else:
                     reply_parts.append(base_str)
@@ -955,7 +1005,7 @@ def process_voice():
                     base_str = f"{qty_word} {size_str} {i_name}".strip()
                     if other_mods:
                         mods_str = ", ".join(other_mods[:-1]) + ", and " + other_mods[-1] if len(other_mods) > 1 else \
-                        other_mods[0]
+                            other_mods[0]
                         reply_text = f"{base_str} with {mods_str}"
                     else:
                         reply_text = base_str
@@ -1062,7 +1112,8 @@ def api_sales():
             hourly_data[hour_str]["order_count"] += 1
             for item in o.items:
                 items_sold[item.name] = items_sold.get(item.name, 0) + item.quantity
-                hourly_data[hour_str]["items_sold"][item.name] = hourly_data[hour_str]["items_sold"].get(item.name, 0) + item.quantity
+                hourly_data[hour_str]["items_sold"][item.name] = hourly_data[hour_str]["items_sold"].get(item.name,
+                                                                                                         0) + item.quantity
         else:
             hourly_data[hour_str]["void_count"] += 1
             reason = o.void_reason or "Unknown Reason"
@@ -1109,12 +1160,26 @@ def generate_ai_report():
 
     end_date = base_date.replace(hour=23, minute=59, second=59)
 
+    # Establish bounds for current and previous tracking blocks
     if timeframe == 'week':
         start_date = (base_date - timedelta(days=6)).replace(hour=0, minute=0, second=0)
+        prev_start = start_date - timedelta(days=7)
     elif timeframe == 'month':
         start_date = (base_date - timedelta(days=29)).replace(hour=0, minute=0, second=0)
+        prev_start = start_date - timedelta(days=30)
     else:  # day
         start_date = base_date.replace(hour=0, minute=0, second=0)
+        prev_start = start_date - timedelta(days=1)
+
+    prev_end = start_date - timedelta(seconds=1)
+
+    # Fetch Prior Frame Data to Calculate Sales Percentage Gaps
+    prev_orders = Order.query.filter(
+        Order.timestamp >= prev_start,
+        Order.timestamp <= prev_end,
+        Order.status != 'Voided'
+    ).all()
+    prev_sales = sum(o.total_price for o in prev_orders)
 
     orders = Order.query.filter(
         Order.timestamp >= start_date,
@@ -1142,13 +1207,23 @@ def generate_ai_report():
             reason = o.void_reason or "Unknown"
             void_reasons_count[reason] = void_reasons_count.get(reason, 0) + 1
 
+    # Format Chronological Peak Hours & Gather Order Volumes
     sorted_hours = sorted(hourly_data.items(), key=lambda x: x[1], reverse=True)
-    peak_hours = [h[0] for h in sorted_hours[:3]] if sorted_hours else []
+    top_hours = [h[0] for h in sorted_hours[:5]] if sorted_hours else []
+    peak_hours = sorted(top_hours)
+
+    total_peak_vol = sum(hourly_data[h] for h in peak_hours) if peak_hours else 0
+    avg_peak_vol = total_peak_vol // len(peak_hours) if peak_hours else 0
 
     sorted_items = sorted(items_sold.items(), key=lambda x: x[1], reverse=True)
     top_items = [i[0] for i in sorted_items[:3]] if sorted_items else []
 
     top_void_reason = max(void_reasons_count, key=void_reasons_count.get) if void_reasons_count else "None"
+
+    if prev_sales > 0:
+        sales_gap_pct = ((total_sales - prev_sales) / prev_sales) * 100
+    else:
+        sales_gap_pct = 100.0 if total_sales > 0 else 0.0
 
     # AI Generation Logic
     api_key = os.environ.get('GEMINI_API_KEY')
@@ -1157,17 +1232,27 @@ def generate_ai_report():
     if not orders:
         ai_recommendation = "No sales data found for the selected timeframe. Ensure your store is operating or adjust the date filter."
     else:
-        # Prompt includes new instructions addressing the recorded void issues
         context_prompt = f"""
         You are an AI business analyst for a coffee shop. 
-        Analyze this data and provide a concise 3-4 sentence recommendation for manpower scheduling, inventory, and mitigating manageable voided orders.
-        Timeframe: {timeframe}
-        Total Sales: ₱{total_sales}
-        Total Products Sold: {total_products_sold}
-        Top Items: {', '.join(top_items)}
-        Peak Hours: {', '.join(peak_hours)}
-        Total Voided Orders: {total_voids}
-        Top Void Reason: {top_void_reason}
+        Analyze this data and provide a highly detailed, varied, and effective action plan. Do NOT use markdown bold/italics excessively, keep it readable.
+
+        DATA POINTS:
+        - Timeframe: {timeframe}
+        - Current Sales: ₱{total_sales}
+        - Previous Timeframe Sales: ₱{prev_sales}
+        - Sales Growth/Decline: {sales_gap_pct:.2f}%
+        - Total Products Sold: {total_products_sold}
+        - Top Items: {', '.join(top_items)}
+        - Peak Hours (Chronological): {', '.join(peak_hours)}
+        - Average Transactions During Peak: {avg_peak_vol}
+        - Total Voided Orders: {total_voids}
+        - Top Void Reason: {top_void_reason}
+
+        REQUIRED OUTPUT FORMAT (Must address all 4 points clearly):
+        1. Sales Comparison: State the percentage gap compared to the previous timeframe and briefly analyze this trend.
+        2. Peak Hours & Manpower: List the peak hours chronologically. Based on the transaction volume ({avg_peak_vol} avg orders per peak hour), recommend exactly how many staff/baristas are needed to survive these surges.
+        3. Void Mitigation: Since "{top_void_reason}" is the highest cause of voids, provide a specific, actionable, and effective plan to prevent this and recover lost revenue.
+        4. Upselling Tactics: Provide creative, diverse tricks and tactics for staff to effectively upsell add-ons, sizes, or pairings based on the top items.
         """
         try:
             if api_key:
@@ -1178,16 +1263,12 @@ def generate_ai_report():
             else:
                 raise Exception("No API Key Provided")
         except Exception:
-            # Smart Fallback Expert System
-            ai_recommendation = f"Based on the {timeframe} data, your peak hours are clearly defined around {', '.join(peak_hours) if peak_hours else 'various mixed hours'}. "
-            ai_recommendation += f"To optimize operations, I highly recommend scheduling additional manpower just before these times to handle the surge effectively. "
-            if top_items:
-                ai_recommendation += f"Your top-performing products are the {', '.join(top_items)}. Ensure you have sufficient inventory for these key items during peak rushes. "
-            if total_voids > 0:
-                ai_recommendation += f"Noticeably, you had {total_voids} voided orders primarily due to '{top_void_reason}'. Consider addressing this root cause to minimize lost revenue. "
-            if total_sales > 0:
-                avg = total_sales / (len(orders) - total_voids) if (len(orders) - total_voids) > 0 else 0
-                ai_recommendation += f"With an average order value of ₱{avg:.2f}, consider training staff to upsell add-ons during off-peak hours to boost overall revenue."
+            # Smart Fallback Expert System if Gemini is Unavailable
+            dir_text = "an increase" if sales_gap_pct >= 0 else "a decrease"
+            ai_recommendation = f"1. Sales Comparison: Current sales show {dir_text} of {abs(sales_gap_pct):.2f}% compared to the previous {timeframe}.\n\n"
+            ai_recommendation += f"2. Peak Hours & Manpower: Your peak hours occur chronologically at {', '.join(peak_hours)}. With an average volume of {avg_peak_vol} orders per peak hour, we recommend assigning at least 2-3 staff members during these specific blocks.\n\n"
+            ai_recommendation += f"3. Void Mitigation: You had {total_voids} voided orders primarily due to '{top_void_reason}'. To mitigate this, implement a double-check validation step at the POS and train staff to confirm orders verbally before final punch-in.\n\n"
+            ai_recommendation += f"4. Upselling Tactics: Capitalize on top items like {', '.join(top_items)} by offering bundle pairings (e.g., 'Would you like a pastry with that?') or suggesting size upgrades and extra espresso shots to boost average order value."
 
     return jsonify({
         "timeframe": timeframe,
@@ -1249,7 +1330,9 @@ def export_report():
     cw.writerow(['Total Products Sold:', total_products])
     cw.writerow([])
 
-    cw.writerow(['Transaction ID', 'Date', 'Time', 'Order Type', 'Payment Method', 'Status', 'Void Reason', 'Total Price', 'Items Ordered'])
+    cw.writerow(
+        ['Transaction ID', 'Date', 'Time', 'Order Type', 'Payment Method', 'Status', 'Void Reason', 'Total Price',
+         'Items Ordered'])
     for o in orders:
         items_str = " | ".join(
             [f"{i.quantity}x {i.name} ({i.modifiers})" if i.modifiers else f"{i.quantity}x {i.name}" for i in o.items])
